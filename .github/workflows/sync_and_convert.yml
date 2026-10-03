@@ -1,0 +1,48 @@
+name: Sync Upstream and Convert RTP Links
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync-and-convert:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout current repo
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch upstream and sync
+        run: |
+          cp -r .github /tmp/github_backup
+          git remote add upstream https://github.com/Tzwcard/ChinaTelecom-GuangdongIPTV-RTP-List || true
+          git fetch upstream
+          git checkout -B master
+          git reset --hard upstream/master
+          cp -r /tmp/github_backup .github
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Convert RTP links in m3u files
+        run: python .github/workflows/convert_rtp.py
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore: sync upstream and convert rtp:// to http proxy"
+            git push origin master --force
+          fi
